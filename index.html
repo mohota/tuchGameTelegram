@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>بازی رکوردگیری - نسخه پیشرفته</title>
+    <style>
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: #111; color: white; font-family: Tahoma, sans-serif;
+            overflow: hidden; touch-action: none; user-select: none;
+        }
+        
+        /* افکت لرزش صفحه برای خطای کلیک */
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(3px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+        body.shake { animation: shake 0.3s; background-color: #310000; }
+
+        #game-area { position: relative; width: 100%; height: 100%; }
+        
+        /* انیمیشن پاپ‌آپ جعبه‌ها */
+        @keyframes popIn {
+            0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+            80% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+
+        .box {
+            position: absolute; cursor: pointer;
+            transform: translate(-50%, -50%); display: none;
+        }
+        .pop-anim { animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+
+        #normal-box { width: 50px; height: 50px; background-color: #00ff88; box-shadow: 0 0 15px #00ff88; border-radius: 8px; z-index: 2; }
+        #prize-box { width: 45px; height: 45px; background-color: #ffd700; box-shadow: 0 0 25px #ffd700; border-radius: 50%; z-index: 3; }
+        #lose-box { width: 60px; height: 60px; background-color: #ff3333; box-shadow: 0 0 20px #ff3333; border-radius: 8px; z-index: 4; }
+
+        /* انیمیشن متن شناور (امتیازات روی صفحه) */
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-60px) scale(1.5); opacity: 0; }
+        }
+        .floating-text {
+            position: absolute; font-weight: bold; font-size: 22px;
+            pointer-events: none; transform: translate(-50%, -50%);
+            animation: floatUp 0.8s ease-out forwards; z-index: 100;
+        }
+
+        /* رابط کاربری */
+        #ui-layer {
+            position: absolute; top: 20px; left: 20px; right: 20px;
+            display: flex; justify-content: space-between;
+            pointer-events: none; z-index: 10;
+        }
+        .ui-box { font-size: 20px; font-weight: bold; background: rgba(0,0,0,0.5); padding: 5px 10px; border-radius: 8px; }
+        
+        /* استایل کومبو */
+        #combo-display { color: #ff00ff; display: none; transition: transform 0.1s; text-shadow: 0 0 10px #ff00ff; }
+
+        /* صفحه پایان */
+        #game-over-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); display: none;
+            flex-direction: column; justify-content: center; align-items: center; z-index: 20;
+        }
+        #game-over-screen button { margin-top: 20px; padding: 12px 35px; font-size: 18px; font-weight: bold; background-color: #00ff88; border: none; border-radius: 8px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <div class="ui-box">
+            امتیاز: <span id="score">0</span>
+            <div id="combo-display">🔥 x<span id="combo-multiplier">1</span></div>
+        </div>
+        <div class="ui-box">زمان: <span id="timer">30</span>s</div>
+    </div>
+
+    <div id="game-area">
+        <div id="normal-box" class="box"></div>
+        <div id="prize-box" class="box"></div>
+        <div id="lose-box" class="box"></div>
+    </div>
+
+    <div id="game-over-screen">
+        <h1 style="color: #ff3333;">پایان بازی!</h1>
+        <h2 id="final-score-display">امتیاز شما: 0</h2>
+        <h3 id="high-score-display" style="color: #ffd700;">بهترین رکورد: 0</h3>
+        <p id="record-msg" style="color: #00ff88; display: none; font-size: 20px;">🎉 رکورد جدید ثبت کردی! 🎉</p>
+        <button onclick="startGame()">شروع مجدد</button>
+    </div>
+
+    <script>
+        const ws = new WebSocket(`ws://${location.host}/ws`);
+        
+        let score = 0;
+        let combo = 0;
+        let timeLeft = 30;
+        let gameTimer; // جایگزین setInterval قبلی برای کنترل سختی
+        let timerInterval;
+        let isGameActive = false;
+
+        // تنظیمات سختی پویا
+        const BASE_DURATION = 2200; // زمان ماندن اولیه (2.2 ثانیه)
+        const MIN_DURATION = 600;   // حداقل زمان (0.6 ثانیه - نهایت سختی)
+        const SPEED_STEP = 15;      // به ازای هر امتیاز 15 میلی‌ثانیه سریع‌تر می‌شود
+
+        const scoreEl = document.getElementById('score');
+        const comboDisplay = document.getElementById('combo-display');
+        const comboMultiplierEl = document.getElementById('combo-multiplier');
+        const timerEl = document.getElementById('timer');
+        const gameArea = document.getElementById('game-area');
+        
+        const normalBox = document.getElementById('normal-box');
+        const prizeBox = document.getElementById('prize-box');
+        const loseBox = document.getElementById('lose-box');
+
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.type === "result") {
+                document.getElementById('high-score-display').innerText = `بهترین رکورد: ${data.high_score}`;
+                if (data.is_new_record) {
+                    document.getElementById('record-msg').style.display = 'block';
+                }
+            }
+        };
+
+        function createFloatingText(x, y, text, color) {
+            const el = document.createElement('div');
+            el.className = 'floating-text';
+            el.style.left = x + 'px';
+            el.style.top = y + 'px';
+            el.style.color = color;
+            el.innerText = text;
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 800);
+        }
+
+        function showBox(boxElement, duration) {
+            if (!isGameActive) return;
+            
+            boxElement.classList.remove('pop-anim');
+            void boxElement.offsetWidth;
+            boxElement.classList.add('pop-anim');
+
+            boxElement.style.left = Math.floor(Math.random() * 70 + 15) + "%";
+            boxElement.style.top = Math.floor(Math.random() * 70 + 15) + "%";
+            boxElement.style.display = "block";
+            
+            boxElement.hideTimeout = setTimeout(() => {
+                if (boxElement.style.display === "block") {
+                    boxElement.style.display = "none";
+                    
+                    // از بین رفتن کمبو در صورت کلیک نکردن روی جعبه سبز
+                    if (boxElement === normalBox) {
+                        combo = 0;
+                        updateComboUI();
+                    }
+                }
+            }, duration);
+        }
+
+        function gameLoop() {
+            if (!isGameActive) return;
+
+            // محاسبه زمان ماندن جعبه‌ها بر اساس امتیاز
+            let currentDuration = BASE_DURATION - (score * SPEED_STEP);
+            if (currentDuration < MIN_DURATION) currentDuration = MIN_DURATION;
+
+            // نمایش جعبه‌ها
+            showBox(normalBox, currentDuration);
+            
+            // جعبه طلایی سخت‌تر گیر میاد (سریع‌تر غیب میشه)
+            if (Math.random() < 0.15) showBox(prizeBox, currentDuration * 0.7);
+            
+            // جعبه قرمز بیشتر روی صفحه میمونه تا احتمال خطا بالا بره
+            if (Math.random() < 0.10) showBox(loseBox, currentDuration * 1.5);
+
+            // سرعت اسپاون شدن جعبه بعدی هم با پیشرفت بازی سریع‌تر می‌شود
+            let nextSpawnTime = currentDuration + (Math.random() * 200); 
+            gameTimer = setTimeout(gameLoop, nextSpawnTime);
+        }
+
+        normalBox.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            normalBox.style.display = "none";
+            clearTimeout(normalBox.hideTimeout);
+            handleSuccessClick(1, e.clientX, e.clientY, '#00ff88');
+        });
+
+        prizeBox.addEventListener('pointerdown', (e) => {
+            e.stopPropagation(); 
+            prizeBox.style.display = "none";
+            clearTimeout(prizeBox.hideTimeout);
+            handleSuccessClick(10, e.clientX, e.clientY, '#ffd700');
+        });
+
+        loseBox.addEventListener('pointerdown', (e) => {
+            e.stopPropagation(); 
+            loseBox.style.display = "none";
+            createFloatingText(e.clientX, e.clientY, "باخت!", '#ff3333');
+            endGame(); 
+        });
+
+        gameArea.addEventListener('pointerdown', (e) => {
+            if (!isGameActive) return;
+            combo = 0;
+            updateComboUI();
+            
+            document.body.classList.add('shake');
+            setTimeout(() => document.body.classList.remove('shake'), 300);
+
+            score -= 5;
+            scoreEl.innerText = score;
+            createFloatingText(e.clientX, e.clientY, "-5", '#ff3333');
+        });
+
+        function handleSuccessClick(basePoints, x, y, color) {
+            combo++;
+            let earnedPoints = basePoints * combo;
+            score += earnedPoints;
+            scoreEl.innerText = score;
+            
+            comboDisplay.style.transform = "scale(1.2)";
+            setTimeout(() => comboDisplay.style.transform = "scale(1)", 100);
+
+            updateComboUI();
+            
+            let textToShow = `+${earnedPoints}`;
+            if (combo > 1) textToShow += ` (x${combo})`;
+            createFloatingText(x, y, textToShow, color);
+        }
+
+        function updateComboUI() {
+            if (combo > 1) {
+                comboDisplay.style.display = 'block';
+                comboMultiplierEl.innerText = combo;
+            } else {
+                comboDisplay.style.display = 'none';
+            }
+        }
+
+        function startGame() {
+            score = 0; combo = 0; timeLeft = 60; isGameActive = true;
+            scoreEl.innerText = score; timerEl.innerText = timeLeft;
+            updateComboUI();
+            
+            document.getElementById('game-over-screen').style.display = 'none';
+            document.getElementById('record-msg').style.display = 'none';
+            
+            clearTimeout(gameTimer); // استفاده از clearTimeout به جای Interval
+            clearInterval(timerInterval);
+            
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                timerEl.innerText = timeLeft;
+                if (timeLeft <= 0) endGame();
+            }, 1000);
+            
+            gameLoop();
+        }
+
+        function endGame() {
+            isGameActive = false;
+            clearTimeout(gameTimer);
+            clearInterval(timerInterval);
+            
+            normalBox.style.display = "none";
+            prizeBox.style.display = "none";
+            loseBox.style.display = "none";
+            
+            document.getElementById('game-over-screen').style.display = 'flex';
+            document.getElementById('final-score-display').innerText = `امتیاز نهایی: ${score}`;
+            
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ action: "game_over", score: score }));
+            }
+        }
+
+        setTimeout(startGame, 500);
+    </script>
+</body>
+</html>
