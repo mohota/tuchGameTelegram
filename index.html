@@ -3,169 +3,300 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>بازی رکوردگیری - نسخه پیشرفته</title>
+    <title>تپ مستر - نبرد ثانیه‌ها</title>
     <style>
+        :root {
+            --neon-green: #00ff88;
+            --neon-gold: #ffd700;
+            --neon-blue: #00d2ff;
+            --neon-red: #ff334b;
+            --fever-color: #ff00ff;
+        }
+
         body, html {
             margin: 0; padding: 0; width: 100%; height: 100%;
-            background-color: #111; color: white; font-family: Tahoma, sans-serif;
+            background-color: #0d0f18; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, sans-serif;
             overflow: hidden; touch-action: none; user-select: none;
         }
-        
-        /* افکت لرزش صفحه برای خطای کلیک */
-        @keyframes shake {
-            0% { transform: translate(1px, 1px) rotate(0deg); }
-            10% { transform: translate(-1px, -2px) rotate(-1deg); }
-            20% { transform: translate(-3px, 0px) rotate(1deg); }
-            30% { transform: translate(3px, 2px) rotate(0deg); }
-            40% { transform: translate(1px, -1px) rotate(1deg); }
-            50% { transform: translate(-1px, 2px) rotate(-1deg); }
-            60% { transform: translate(-3px, 1px) rotate(0deg); }
-            70% { transform: translate(3px, 1px) rotate(-1deg); }
-            80% { transform: translate(-1px, -1px) rotate(1deg); }
-            90% { transform: translate(1px, 2px) rotate(0deg); }
-            100% { transform: translate(1px, -2px) rotate(-1deg); }
+
+        /* لرزش کل صفحه */
+        @keyframes screenShake {
+            0% { transform: translate(0, 0); }
+            20% { transform: translate(-4px, 4px); }
+            40% { transform: translate(4px, -4px); }
+            60% { transform: translate(-4px, -2px); }
+            80% { transform: translate(2px, 4px); }
+            100% { transform: translate(0, 0); }
         }
-        body.shake { animation: shake 0.3s; background-color: #310000; }
+        body.shake { animation: screenShake 0.25s ease-in-out; }
+
+        /* افکت حالت تب نئونی */
+        body.fever-mode {
+            background: radial-gradient(circle at center, #260833 0%, #0d0f18 100%);
+            box-shadow: inset 0 0 50px var(--fever-color);
+        }
 
         #game-area { position: relative; width: 100%; height: 100%; }
-        
-        /* انیمیشن پاپ‌آپ جعبه‌ها */
-        @keyframes popIn {
-            0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
-            80% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
-            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-        }
 
-        .box {
-            position: absolute; cursor: pointer;
-            transform: translate(-50%, -50%); display: none;
-        }
-        .pop-anim { animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
-
-        #normal-box { width: 50px; height: 50px; background-color: #00ff88; box-shadow: 0 0 15px #00ff88; border-radius: 8px; z-index: 2; }
-        #prize-box { width: 45px; height: 45px; background-color: #ffd700; box-shadow: 0 0 25px #ffd700; border-radius: 50%; z-index: 3; }
-        #lose-box { width: 60px; height: 60px; background-color: #ff3333; box-shadow: 0 0 20px #ff3333; border-radius: 8px; z-index: 4; }
-
-        /* انیمیشن متن شناور (امتیازات روی صفحه) */
-        @keyframes floatUp {
-            0% { transform: translateY(0) scale(1); opacity: 1; }
-            100% { transform: translateY(-60px) scale(1.5); opacity: 0; }
-        }
-        .floating-text {
-            position: absolute; font-weight: bold; font-size: 22px;
-            pointer-events: none; transform: translate(-50%, -50%);
-            animation: floatUp 0.8s ease-out forwards; z-index: 100;
-        }
-
-        /* رابط کاربری */
-        #ui-layer {
-            position: absolute; top: 20px; left: 20px; right: 20px;
-            display: flex; justify-content: space-between;
-            pointer-events: none; z-index: 10;
-        }
-        .ui-box { font-size: 20px; font-weight: bold; background: rgba(0,0,0,0.5); padding: 5px 10px; border-radius: 8px; }
-        
-        /* استایل کومبو */
-        #combo-display { color: #ff00ff; display: none; transition: transform 0.1s; text-shadow: 0 0 10px #ff00ff; }
-
-        /* صفحه پایان */
-        #game-over-screen {
+        /* ذرات پس‌زمینه */
+        #fx-canvas {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9); display: none;
-            flex-direction: column; justify-content: center; align-items: center; z-index: 20;
+            pointer-events: none; z-index: 15;
         }
-        #game-over-screen button { margin-top: 20px; padding: 12px 35px; font-size: 18px; font-weight: bold; background-color: #00ff88; border: none; border-radius: 8px; cursor: pointer; }
+
+        /* المان‌های بازی */
+        .target {
+            position: absolute; cursor: pointer; display: none;
+            transform: translate(-50%, -50%) scale(0);
+            transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border-radius: 14px; box-sizing: border-box;
+        }
+        .target.show { transform: translate(-50%, -50%) scale(1); }
+
+        #box-normal { width: 54px; height: 54px; background: var(--neon-green); box-shadow: 0 0 20px var(--neon-green); z-index: 2; }
+        #box-gold { width: 46px; height: 46px; background: var(--neon-gold); border-radius: 50%; box-shadow: 0 0 25px var(--neon-gold); z-index: 3; }
+        #box-freeze { width: 50px; height: 50px; background: var(--neon-blue); border-radius: 50%; box-shadow: 0 0 25px var(--neon-blue); z-index: 3; }
+        #box-bomb { width: 62px; height: 62px; background: var(--neon-red); box-shadow: 0 0 25px var(--neon-red); z-index: 4; }
+
+        /* رابط کاربری بالا */
+        #hud {
+            position: absolute; top: 15px; left: 15px; right: 15px;
+            display: flex; justify-content: space-between; align-items: center;
+            pointer-events: none; z-index: 20;
+        }
+        .stat-card {
+            background: rgba(18, 24, 38, 0.85); backdrop-filter: blur(8px);
+            padding: 8px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);
+            font-size: 16px; font-weight: bold; text-align: center;
+        }
+
+        /* نوار انرژی تب */
+        #fever-bar-wrap {
+            position: absolute; top: 75px; left: 20px; right: 20px; height: 6px;
+            background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; z-index: 20;
+        }
+        #fever-bar-fill {
+            width: 0%; height: 100%; background: linear-gradient(90deg, #ff00ff, #00ffff);
+            transition: width 0.2s ease;
+        }
+
+        /* پاپ‌آپ متون شناور */
+        @keyframes floatEffect {
+            0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -100px) scale(1.6); }
+        }
+        .score-pop {
+            position: absolute; font-weight: 900; font-size: 24px;
+            pointer-events: none; animation: floatEffect 0.7s ease-out forwards; z-index: 30;
+        }
+
+        /* مدال‌ها و صفحات پاپ‌آپ */
+        .modal {
+            position: absolute; inset: 0; background: rgba(10, 12, 20, 0.95);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 50; padding: 25px; box-sizing: border-box;
+        }
+        .modal h1 { margin: 0 0 10px 0; font-size: 32px; }
+        .modal input {
+            padding: 12px 18px; border-radius: 10px; border: 1px solid #333;
+            background: #1c2130; color: #fff; font-size: 16px; text-align: center;
+            outline: none; margin-bottom: 15px; width: 220px;
+        }
+        .btn {
+            background: linear-gradient(135deg, var(--neon-green), #00ba63);
+            color: #000; font-weight: bold; border: none; padding: 14px 40px;
+            font-size: 18px; border-radius: 12px; cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0, 255, 136, 0.4);
+        }
+
+        /* جدول امتیازات */
+        .table-wrap {
+            width: 100%; max-width: 320px; max-height: 200px;
+            overflow-y: auto; margin: 15px 0; border-radius: 10px;
+            background: rgba(255, 255, 255, 0.05); padding: 5px;
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: right; }
+        th, td { padding: 8px 12px; }
+        th { color: #888; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        tr:nth-child(1) td { color: var(--neon-gold); font-weight: bold; }
+        tr:nth-child(2) td { color: #silver; }
+        tr:nth-child(3) td { color: #cd7f32; }
     </style>
 </head>
 <body>
 
-    <div id="ui-layer">
-        <div class="ui-box">
-            امتیاز: <span id="score">0</span>
-            <div id="combo-display">🔥 x<span id="combo-multiplier">1</span></div>
+    <!-- لایه رابط کاربری -->
+    <div id="hud">
+        <div class="stat-card">
+            امتیاز: <span id="score" style="color: var(--neon-green)">0</span>
+            <span id="multiplier" style="color: var(--fever-color); display: none;">x2</span>
         </div>
-        <div class="ui-box">زمان: <span id="timer">30</span>s</div>
+        <div class="stat-card">❤️ <span id="lives">3</span></div>
+        <div class="stat-card">⏳ <span id="timer">45</span>s</div>
     </div>
 
+    <!-- نوار تب -->
+    <div id="fever-bar-wrap"><div id="fever-bar-fill"></div></div>
+
+    <!-- زمین بازی -->
     <div id="game-area">
-        <div id="normal-box" class="box"></div>
-        <div id="prize-box" class="box"></div>
-        <div id="lose-box" class="box"></div>
+        <canvas id="fx-canvas"></canvas>
+        <div id="box-normal" class="target"></div>
+        <div id="box-gold" class="target"></div>
+        <div id="box-freeze" class="target"></div>
+        <div id="box-bomb" class="target"></div>
     </div>
 
-    <div id="game-over-screen">
-        <h1 style="color: #ff3333;">پایان بازی!</h1>
-        <h2 id="final-score-display">امتیاز شما: 0</h2>
-        <h3 id="high-score-display" style="color: #ffd700;">بهترین رکورد: 0</h3>
-        <p id="record-msg" style="color: #00ff88; display: none; font-size: 20px;">🎉 رکورد جدید ثبت کردی! 🎉</p>
-        <button onclick="startGame()">شروع مجدد</button>
+    <!-- صفحه شروع / وارد کردن نام -->
+    <div id="start-modal" class="modal">
+        <h1 style="color: var(--neon-green);">تپ مستر</h1>
+        <p style="color: #aaa; margin-bottom: 20px;">سرعت، دقت و هیجان بی‌وقفه!</p>
+        <input type="text" id="player-name-input" placeholder="نام یا لقب خودت" maxlength="15">
+        <button class="btn" onclick="confirmNameAndStart()">شروع نبرد</button>
+    </div>
+
+    <!-- صفحه پایان و جدول برندگان -->
+    <div id="game-over-modal" class="modal" style="display: none;">
+        <h1 style="color: var(--neon-red);">پایان بازی!</h1>
+        <h2 id="final-score" style="margin: 5px 0;">امتیاز نهایی: 0</h2>
+        <p id="rank-display" style="color: var(--neon-gold); font-weight: bold; margin: 0;"></p>
+        
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th>رتبه</th><th>نام</th><th>امتیاز</th></tr>
+                </thead>
+                <tbody id="leaderboard-body"></tbody>
+            </table>
+        </div>
+        <button class="btn" onclick="resetGame()">دوباره بازی کن</button>
     </div>
 
     <script>
-        const ws = new WebSocket(`ws://${location.host}/ws`);
-        
-        let score = 0;
-        let combo = 0;
-        let timeLeft = 30;
-        let gameTimer; // جایگزین setInterval قبلی برای کنترل سختی
-        let timerInterval;
-        let isGameActive = false;
+        // اتصال هوشمند وب‌سوکت با پشتیبانی از SSL/Cloudflare
+        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const ws = new WebSocket(`${protocol}${window.location.host}/ws`);
 
-        // تنظیمات سختی پویا
-        const BASE_DURATION = 2200; // زمان ماندن اولیه (2.2 ثانیه)
-        const MIN_DURATION = 600;   // حداقل زمان (0.6 ثانیه - نهایت سختی)
-        const SPEED_STEP = 15;      // به ازای هر امتیاز 15 میلی‌ثانیه سریع‌تر می‌شود
-
-        const scoreEl = document.getElementById('score');
-        const comboDisplay = document.getElementById('combo-display');
-        const comboMultiplierEl = document.getElementById('combo-multiplier');
-        const timerEl = document.getElementById('timer');
-        const gameArea = document.getElementById('game-area');
-        
-        const normalBox = document.getElementById('normal-box');
-        const prizeBox = document.getElementById('prize-box');
-        const loseBox = document.getElementById('lose-box');
-
-        ws.onmessage = function(event) {
-            const data = JSON.parse(event.data);
-            if (data.type === "result") {
-                document.getElementById('high-score-display').innerText = `بهترین رکورد: ${data.high_score}`;
-                if (data.is_new_record) {
-                    document.getElementById('record-msg').style.display = 'block';
-                }
-            }
+        // سیستم سنتز صدا بدون نیاز به دانلود موزیک
+        const AudioFX = {
+            ctx: null,
+            init() {
+                if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            },
+            play(freq, type = 'sine', duration = 0.1, gainVal = 0.2) {
+                try {
+                    this.init();
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch(e) {}
+            },
+            hit() { this.play(550 + Math.random() * 200, 'triangle', 0.08); },
+            gold() { this.play(987, 'sine', 0.2); setTimeout(() => this.play(1318, 'sine', 0.3), 100); },
+            freeze() { this.play(400, 'sine', 0.4); },
+            bomb() { this.play(120, 'sawtooth', 0.3, 0.4); },
+            fever() { this.play(800, 'square', 0.3, 0.15); }
         };
 
-        function createFloatingText(x, y, text, color) {
+        // سیستم گرافیکی پارتیکل‌ها
+        const canvas = document.getElementById('fx-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function spawnParticles(x, y, color) {
+            for (let i = 0; i < 12; i++) {
+                particles.push({
+                    x, y,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: (Math.random() - 0.5) * 8,
+                    size: Math.random() * 5 + 3,
+                    color: color,
+                    alpha: 1
+                });
+            }
+        }
+
+        function renderParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach((p, idx) => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= 0.03;
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = Math.max(p.alpha, 0);
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                if (p.alpha <= 0) particles.splice(idx, 1);
+            });
+            requestAnimationFrame(renderParticles);
+        }
+        renderParticles();
+
+        // متغیرهای حالت بازی
+        let playerName = "بازیکن";
+        let score = 0;
+        let combo = 0;
+        let lives = 3;
+        let timeLeft = 45;
+        let isGameActive = false;
+        let isFever = false;
+        let isFrozen = false;
+        let gameTimerId, spawnTimerId;
+
+        const targets = {
+            normal: document.getElementById('box-normal'),
+            gold: document.getElementById('box-gold'),
+            freeze: document.getElementById('box-freeze'),
+            bomb: document.getElementById('box-bomb')
+        };
+
+        function showFloatingText(x, y, text, color) {
             const el = document.createElement('div');
-            el.className = 'floating-text';
+            el.className = 'score-pop';
             el.style.left = x + 'px';
             el.style.top = y + 'px';
             el.style.color = color;
             el.innerText = text;
             document.body.appendChild(el);
-            setTimeout(() => el.remove(), 800);
+            setTimeout(() => el.remove(), 700);
         }
 
-        function showBox(boxElement, duration) {
-            if (!isGameActive) return;
-            
-            boxElement.classList.remove('pop-anim');
-            void boxElement.offsetWidth;
-            boxElement.classList.add('pop-anim');
+        function triggerShake() {
+            document.body.classList.add('shake');
+            if (window.Telegram?.WebApp?.HapticFeedback) {
+                window.Telegram.WebApp.HapticFeedback.notificationOccurred('error');
+            }
+            setTimeout(() => document.body.classList.remove('shake'), 250);
+        }
 
-            boxElement.style.left = Math.floor(Math.random() * 70 + 15) + "%";
-            boxElement.style.top = Math.floor(Math.random() * 70 + 15) + "%";
-            boxElement.style.display = "block";
+        function spawnBox(elem, duration) {
+            if (!isGameActive) return;
+            const x = Math.floor(Math.random() * 75 + 12);
+            const y = Math.floor(Math.random() * 65 + 18);
+            elem.style.left = x + '%';
+            elem.style.top = y + '%';
+            elem.style.display = 'block';
             
-            boxElement.hideTimeout = setTimeout(() => {
-                if (boxElement.style.display === "block") {
-                    boxElement.style.display = "none";
-                    
-                    // از بین رفتن کمبو در صورت کلیک نکردن روی جعبه سبز
-                    if (boxElement === normalBox) {
-                        combo = 0;
-                        updateComboUI();
+            setTimeout(() => elem.classList.add('show'), 10);
+
+            clearTimeout(elem.timeout);
+            elem.timeout = setTimeout(() => {
+                if (elem.style.display === 'block') {
+                    elem.classList.remove('show');
+                    elem.style.display = 'none';
+                    if (elem === targets.normal) {
+                        resetCombo();
                     }
                 }
             }, duration);
@@ -174,121 +305,179 @@
         function gameLoop() {
             if (!isGameActive) return;
 
-            // محاسبه زمان ماندن جعبه‌ها بر اساس امتیاز
-            let currentDuration = BASE_DURATION - (score * SPEED_STEP);
-            if (currentDuration < MIN_DURATION) currentDuration = MIN_DURATION;
+            let baseSpeed = Math.max(500, 1600 - (score * 8));
+            if (isFrozen) baseSpeed = 1600;
 
-            // نمایش جعبه‌ها
-            showBox(normalBox, currentDuration);
-            
-            // جعبه طلایی سخت‌تر گیر میاد (سریع‌تر غیب میشه)
-            if (Math.random() < 0.15) showBox(prizeBox, currentDuration * 0.7);
-            
-            // جعبه قرمز بیشتر روی صفحه میمونه تا احتمال خطا بالا بره
-            if (Math.random() < 0.10) showBox(loseBox, currentDuration * 1.5);
+            spawnBox(targets.normal, baseSpeed);
 
-            // سرعت اسپاون شدن جعبه بعدی هم با پیشرفت بازی سریع‌تر می‌شود
-            let nextSpawnTime = currentDuration + (Math.random() * 200); 
-            gameTimer = setTimeout(gameLoop, nextSpawnTime);
+            // احتمال ظاهر شدن بمب و آیتم‌های ویژه
+            if (Math.random() < 0.22) spawnBox(targets.bomb, baseSpeed * 1.2);
+            if (Math.random() < 0.15) spawnBox(targets.gold, baseSpeed * 0.7);
+            if (Math.random() < 0.08) spawnBox(targets.freeze, baseSpeed * 0.8);
+
+            let nextSpawn = isFrozen ? 1200 : Math.max(450, baseSpeed * 0.85);
+            spawnTimerId = setTimeout(gameLoop, nextSpawn);
         }
 
-        normalBox.addEventListener('pointerdown', (e) => {
+        // عملکرد کلیک روی اهداف
+        targets.normal.addEventListener('pointerdown', (e) => {
             e.stopPropagation();
-            normalBox.style.display = "none";
-            clearTimeout(normalBox.hideTimeout);
-            handleSuccessClick(1, e.clientX, e.clientY, '#00ff88');
+            hideTarget(targets.normal);
+            AudioFX.hit();
+            handleCombo();
+            const earned = (isFever ? 30 : 10);
+            score += earned;
+            spawnParticles(e.clientX, e.clientY, '#00ff88');
+            showFloatingText(e.clientX, e.clientY, `+${earned}`, '#00ff88');
+            updateUI();
         });
 
-        prizeBox.addEventListener('pointerdown', (e) => {
-            e.stopPropagation(); 
-            prizeBox.style.display = "none";
-            clearTimeout(prizeBox.hideTimeout);
-            handleSuccessClick(10, e.clientX, e.clientY, '#ffd700');
+        targets.gold.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            hideTarget(targets.gold);
+            AudioFX.gold();
+            timeLeft += 2;
+            const earned = 50;
+            score += earned;
+            spawnParticles(e.clientX, e.clientY, '#ffd700');
+            showFloatingText(e.clientX, e.clientY, `+${earned} (⏱ +2s)`, '#ffd700');
+            updateUI();
         });
 
-        loseBox.addEventListener('pointerdown', (e) => {
-            e.stopPropagation(); 
-            loseBox.style.display = "none";
-            createFloatingText(e.clientX, e.clientY, "باخت!", '#ff3333');
-            endGame(); 
+        targets.freeze.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            hideTarget(targets.freeze);
+            AudioFX.freeze();
+            isFrozen = true;
+            spawnParticles(e.clientX, e.clientY, '#00d2ff');
+            showFloatingText(e.clientX, e.clientY, `❄️ یخ‌زدگی!`, '#00d2ff');
+            setTimeout(() => { isFrozen = false; }, 3500);
         });
 
-        gameArea.addEventListener('pointerdown', (e) => {
+        targets.bomb.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            hideTarget(targets.bomb);
+            AudioFX.bomb();
+            triggerShake();
+            resetCombo();
+            lives--;
+            spawnParticles(e.clientX, e.clientY, '#ff334b');
+            showFloatingText(e.clientX, e.clientY, `💔 -1 جان`, '#ff334b');
+            updateUI();
+            if (lives <= 0) endGame();
+        });
+
+        // خطای کلیک روی پس‌زمینه
+        document.getElementById('game-area').addEventListener('pointerdown', (e) => {
             if (!isGameActive) return;
-            combo = 0;
-            updateComboUI();
-            
-            document.body.classList.add('shake');
-            setTimeout(() => document.body.classList.remove('shake'), 300);
-
-            score -= 5;
-            scoreEl.innerText = score;
-            createFloatingText(e.clientX, e.clientY, "-5", '#ff3333');
+            triggerShake();
+            resetCombo();
+            score = Math.max(0, score - 5);
+            showFloatingText(e.clientX, e.clientY, '-5', '#ff334b');
+            updateUI();
         });
 
-        function handleSuccessClick(basePoints, x, y, color) {
-            combo++;
-            let earnedPoints = basePoints * combo;
-            score += earnedPoints;
-            scoreEl.innerText = score;
-            
-            comboDisplay.style.transform = "scale(1.2)";
-            setTimeout(() => comboDisplay.style.transform = "scale(1)", 100);
-
-            updateComboUI();
-            
-            let textToShow = `+${earnedPoints}`;
-            if (combo > 1) textToShow += ` (x${combo})`;
-            createFloatingText(x, y, textToShow, color);
+        function hideTarget(el) {
+            clearTimeout(el.timeout);
+            el.classList.remove('show');
+            el.style.display = 'none';
         }
 
-        function updateComboUI() {
-            if (combo > 1) {
-                comboDisplay.style.display = 'block';
-                comboMultiplierEl.innerText = combo;
-            } else {
-                comboDisplay.style.display = 'none';
+        function handleCombo() {
+            combo++;
+            let fillPercent = Math.min((combo / 10) * 100, 100);
+            document.getElementById('fever-bar-fill').style.width = fillPercent + '%';
+
+            if (combo >= 10 && !isFever) {
+                isFever = true;
+                AudioFX.fever();
+                document.body.classList.add('fever-mode');
+                document.getElementById('multiplier').style.display = 'inline';
+                setTimeout(() => {
+                    isFever = false;
+                    combo = 0;
+                    document.body.classList.remove('fever-mode');
+                    document.getElementById('multiplier').style.display = 'none';
+                    document.getElementById('fever-bar-fill').style.width = '0%';
+                }, 5000);
             }
         }
 
+        function resetCombo() {
+            combo = 0;
+            if (!isFever) document.getElementById('fever-bar-fill').style.width = '0%';
+        }
+
+        function updateUI() {
+            document.getElementById('score').innerText = score;
+            document.getElementById('lives').innerText = lives;
+            document.getElementById('timer').innerText = timeLeft;
+        }
+
+        function confirmNameAndStart() {
+            const val = document.getElementById('player-name-input').value.trim();
+            if (val) playerName = val;
+            document.getElementById('start-modal').style.display = 'none';
+            startGame();
+        }
+
         function startGame() {
-            score = 0; combo = 0; timeLeft = 60; isGameActive = true;
-            scoreEl.innerText = score; timerEl.innerText = timeLeft;
-            updateComboUI();
+            score = 0; combo = 0; lives = 3; timeLeft = 45;
+            isGameActive = true; isFever = false; isFrozen = false;
+            updateUI();
             
-            document.getElementById('game-over-screen').style.display = 'none';
-            document.getElementById('record-msg').style.display = 'none';
-            
-            clearTimeout(gameTimer); // استفاده از clearTimeout به جای Interval
-            clearInterval(timerInterval);
-            
-            timerInterval = setInterval(() => {
+            document.getElementById('game-over-modal').style.display = 'none';
+
+            clearInterval(gameTimerId);
+            clearTimeout(spawnTimerId);
+
+            gameTimerId = setInterval(() => {
                 timeLeft--;
-                timerEl.innerText = timeLeft;
+                updateUI();
                 if (timeLeft <= 0) endGame();
             }, 1000);
-            
+
             gameLoop();
         }
 
         function endGame() {
             isGameActive = false;
-            clearTimeout(gameTimer);
-            clearInterval(timerInterval);
-            
-            normalBox.style.display = "none";
-            prizeBox.style.display = "none";
-            loseBox.style.display = "none";
-            
-            document.getElementById('game-over-screen').style.display = 'flex';
-            document.getElementById('final-score-display').innerText = `امتیاز نهایی: ${score}`;
-            
+            clearInterval(gameTimerId);
+            clearTimeout(spawnTimerId);
+
+            Object.values(targets).forEach(hideTarget);
+
+            document.getElementById('final-score').innerText = `امتیاز شما: ${score}`;
+            document.getElementById('game-over-modal').style.display = 'flex';
+
             if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ action: "game_over", score: score }));
+                ws.send(JSON.stringify({
+                    action: "game_over",
+                    player_name: playerName,
+                    score: score
+                }));
             }
         }
 
-        setTimeout(startGame, 500);
+        function resetGame() {
+            document.getElementById('game-over-modal').style.display = 'none';
+            startGame();
+        }
+
+        // دریافت جدول برترین‌ها از سرور
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.type === "game_over_ack") {
+                document.getElementById('rank-display').innerText = `رتبه شما در سرور: #${data.player_rank}`;
+                const tbody = document.getElementById('leaderboard-body');
+                tbody.innerHTML = '';
+                data.leaderboard.forEach((row, i) => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td>#${i + 1}</td><td>${row.name}</td><td>${row.score}</td>`;
+                    tbody.appendChild(tr);
+                });
+            }
+        };
     </script>
 </body>
 </html>
