@@ -42,7 +42,7 @@ def save_score_and_get_top(player_name: str, score: int):
 
 @app.get("/")
 async def get():
-    with open("./index2.html", "r", encoding="utf-8") as f:
+    with open("./index.html", "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
 
 @app.websocket("/ws")
